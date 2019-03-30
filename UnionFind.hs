@@ -1,5 +1,9 @@
 {-# LANGUAGE Rank2Types #-}
 
+import  Control.Monad
+          (filterM, liftM2)
+import  Control.Monad.ST
+          (ST)
 import  Data.List
           (map, nub)
 import  Data.STRef
@@ -9,10 +13,6 @@ import  Test.QuickCheck
            Property, quickCheck, Testable)
 import  Test.QuickCheck.Monadic
           (assert, pick, PropertyM, pre, run, monadicST)
-import  Control.Monad
-          (filterM, liftM2)
-import  Control.Monad.ST
-          (ST)
 
 data Element s a = Element a (STRef s (Link s a))
 data Link s a = Weight Int
@@ -232,26 +232,26 @@ prop_Union =
 
 main :: IO ()
 main = do
-  putStrLn "prop_FindReturnsRep"
+  putStrLn  "prop_FindReturnsRep"
   quickCheck prop_FindReturnsRep
 
-  putStrLn "prop_FindPreservesReps"
+  putStrLn  "prop_FindPreservesReps"
   quickCheck prop_FindPreservesReps
 
-  putStrLn "prop_UnionPreservesOtherReps"
+  putStrLn  "prop_UnionPreservesOtherReps"
   quickCheck prop_UnionPreservesOtherReps
 
-  putStrLn "prop_UnionUnites"
+  putStrLn  "prop_UnionUnites"
   quickCheck prop_UnionUnites
 
-  putStrLn "prop_WeightInvariant"
+  putStrLn  "prop_WeightInvariant"
   quickCheck prop_WeightInvariant
 
-  putStrLn "prop_Invariant"
+  putStrLn  "prop_Invariant"
   quickCheck prop_Invariant
 
-  putStrLn "prop_Find"
+  putStrLn  "prop_Find"
   quickCheck prop_Find
 
-  putStrLn "prop_Union"
+  putStrLn  "prop_Union"
   quickCheck prop_Union
