@@ -2,8 +2,6 @@ import  Control.Monad
           (liftM2)
 import  Control.Monad.ST
           (ST, runST)
-import  Control.Monad.IO.Class
-          (liftIO)
 import  Data.STRef
           (STRef, newSTRef, readSTRef, writeSTRef)
 import  Test.QuickCheck
@@ -16,8 +14,8 @@ empty = do
   r <- newSTRef []
   return (Queue r)
 
-add :: Queue s a -> a -> ST s ()
-add (Queue s) v = do
+add :: a -> Queue s a -> ST s ()
+add v (Queue s) = do
   q <- readSTRef s
   writeSTRef s (q ++ [v])
 
@@ -48,7 +46,7 @@ perform :: Queue a Int -> [Action] -> ST a [Maybe Int]
 perform q [] = return []
 perform q (a:as) =
   case a of
-    Add n    -> add q n >> perform q as
+    Add n    -> add n q >> perform q as
     Remove   -> remove q >> perform q as
     Front    -> liftM2 (:) (front q) (perform q as)
     Return x -> (x :) <$> perform q as
