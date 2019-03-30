@@ -1,11 +1,18 @@
 {-# LANGUAGE Rank2Types #-}
 
 import  Data.List
+          (map, nub)
 import  Data.STRef
           (STRef, newSTRef, readSTRef, writeSTRef)
 import  Test.QuickCheck
+          (choose, frequency, forAll, Gen,
+           Property, quickCheck, Testable)
 import  Test.QuickCheck.Monadic
+          (assert, pick, PropertyM, pre, run, monadicST)
+import  Control.Monad
+          (filterM, liftM2)
 import  Control.Monad.ST
+          (ST)
 
 data Element s a = Element a (STRef s (Link s a))
 data Link s a = Weight Int
@@ -82,13 +89,12 @@ actions n =
     where element = choose (0, n - 1)
 
 -- quantifying over all states
--- TODO: what is 'imperative' ?
--- forAllStates :: (forall s. [Element s ()] -> PropertyM (ST s) a) -> Property
--- forAllStates p =
---   forAll (actions 0) $ \as ->
---     imperative (do
---       vars <- run (exec as [])
---       p vars)
+forAllStates :: Testable a => (forall s. [Element s ()] -> PropertyM (ST s) a) -> Property
+forAllStates p =
+  forAll (actions 0) $ \as ->
+    monadicST (do              -- 'imperative' was renamed into 'monadicST'
+      vars <- run (exec as [])
+      p vars)
 
 pickElement :: Monad m => [a] -> PropertyM m a
 pickElement vars = do
@@ -104,12 +110,7 @@ representative (Element a r) = do
     Weight w -> return (Element a r)
     Next next -> representative next
 
-two :: Monad m => m a -> m (a, a)
-two x = (\x -> (x, x)) <$> x
-
-three :: Monad m => m a -> m (a, a, a)
-three x = (\x -> (x, x, x)) <$> x
-
+prop_FindReturnsRep :: Property
 prop_FindReturnsRep =
   forAllStates $ \vars ->
     do
@@ -118,35 +119,47 @@ prop_FindReturnsRep =
       r' <- run (findElement v)
       assert (r == r')
 
+prop_FindPreservesReps :: Property
 prop_FindPreservesReps =
   forAllStates $ \vars ->
     do
-      (v, v') <- two (pickElement vars)
+      v  <- pickElement vars
+      v' <- pickElement vars
       r0 <- run (representative v)
       r' <- run (findElement v')
       r1 <- run (representative v)
       assert (r0 == r1)
 
+prop_UnionPreservesOtherReps :: Property
 prop_UnionPreservesOtherReps =
   forAllStates $ \vars ->
     do
-      (v0, v1, v2) <- three (pickElement vars)
+      v0 <- pickElement vars
+      v1 <- pickElement vars
+      v2 <- pickElement vars
       [r0, r1, r2] <- run (mapM representative [v0, v1, v2])
+
+      -- a lot of tests will be discarded because it doesn't satisfy this precondition
       pre (r0 /= r1 && r0 /= r2)
       run (unionElements v1 v2)
       r0' <- run (representative v0)
       assert (r0 == r0')
 
+prop_UnionUnites :: Property
 prop_UnionUnites =
   forAllStates $ \vars ->
     do
-      (v1, v2) <- two (pickElement vars)
+      v1 <- pickElement vars
+      v2 <- pickElement vars
       c1 <- run (equivClass vars v1)
       c2 <- run (equivClass vars v2)
       run (unionElements v1 v2)
       c1' <- run (mapM representative c1)
       c2' <- run (mapM representative c2)
       assert (length (nub (c1' ++ c2')) == 1)
+    where
+      equivClass vars v = filterM (=== v) vars
+      e1 === e2 = liftM2 (==) (representative e1) (representative e2)
 
 
 position :: Eq a => [a] -> a -> Int
@@ -162,6 +175,7 @@ abstract vars = mapM abs vars
       r <- representative v
       return (position vars r)
 
+prop_Invariant :: Property
 prop_Invariant =
   forAllStates $ \vars ->
     do
@@ -183,6 +197,7 @@ implements vars m s = do
   repr' <- run (abstract vars)
   assert (s repr ans repr')
 
+prop_Find :: Property
 prop_Find =
   forAllStates $ \vars ->
     do
@@ -191,10 +206,35 @@ prop_Find =
         (position vars <$> findElement v)
         (findS (position vars v))
 
+prop_Union :: Property
 prop_Union =
   forAllStates $ \vars ->
     do
-      (v, v') <- two (pickElement vars)
+      v  <- pickElement vars
+      v' <- pickElement vars
       implements vars
         (unionElements v v')
         (unionS (position vars v) (position vars v'))
+
+main :: IO ()
+main = do
+  putStrLn "prop_FindReturnsRep"
+  quickCheck prop_FindReturnsRep
+
+  putStrLn "prop_FindPreservesReps"
+  quickCheck prop_FindPreservesReps
+
+  putStrLn "prop_UnionPreservesOtherReps"
+  quickCheck prop_UnionPreservesOtherReps
+
+  putStrLn "prop_UnionUnites"
+  quickCheck prop_UnionUnites
+
+  putStrLn "prop_Invariant"
+  quickCheck prop_Invariant
+
+  putStrLn "prop_Find"
+  quickCheck prop_Find
+
+  putStrLn "prop_Union"
+  quickCheck prop_Union
