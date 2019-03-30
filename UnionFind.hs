@@ -139,7 +139,7 @@ prop_UnionPreservesOtherReps =
       v2 <- pickElement vars
       [r0, r1, r2] <- run (mapM representative [v0, v1, v2])
 
-      -- a lot of tests will be discarded because it doesn't satisfy this precondition
+      -- a lot of tests will be discarded because they don't satisfy this precondition
       pre (r0 /= r1 && r0 /= r2)
       run (unionElements v1 v2)
       r0' <- run (representative v0)
@@ -160,6 +160,17 @@ prop_UnionUnites =
     where
       equivClass vars v = filterM (=== v) vars
       e1 === e2 = liftM2 (==) (representative e1) (representative e2)
+
+-- Doesn't hold
+prop_WeightInvariant :: Property
+prop_WeightInvariant =
+  forAllStates $ \vars ->
+    do
+      v <- pickElement vars
+      r@(Element _ link) <- run (representative v)
+      Weight w <- run (readSTRef link)
+      rs <- run (mapM representative vars)
+      assert (w == length (filter (== r) rs))
 
 
 position :: Eq a => [a] -> a -> Int
@@ -182,15 +193,18 @@ prop_Invariant =
       repr <- run (abstract vars)
       assert (repr == map (repr !!) repr)
 
+findS :: Eq a => Int -> [a] -> a -> [a] -> Bool
 findS x repr y repr' =
   repr == repr' && y == repr !! x
 
+unionS :: Eq a => Int -> Int -> [a] -> () -> [a] -> Bool
 unionS x y repr () repr' =
   let z = repr' !! x in
       (z == repr !! x || z == repr !! y) &&
         repr' == [if z' == repr !! x || z' == repr !! y
                      then z else z' | z' <- repr]
 
+implements :: [Element a b] -> ST a t -> ([Int] -> t -> [Int] -> Bool) -> PropertyM (ST a) ()
 implements vars m s = do
   repr  <- run (abstract vars)
   ans   <- run m
@@ -229,6 +243,9 @@ main = do
 
   putStrLn "prop_UnionUnites"
   quickCheck prop_UnionUnites
+
+  putStrLn "prop_WeightInvariant"
+  quickCheck prop_WeightInvariant
 
   putStrLn "prop_Invariant"
   quickCheck prop_Invariant
